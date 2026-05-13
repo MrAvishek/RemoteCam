@@ -12,12 +12,38 @@ USERNAME = os.getenv("USERN")
 PASSWORD = os.getenv("PASSWORD")
 # print(f"password: {PASSWORD} {type(PASSWORD)}")
 # print(f"USERNAME: {USERNAME} {type(USERNAME)}")
-camera = cv2.VideoCapture(0)
+# camera = cv2.VideoCapture(0)
 
-camera.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-camera.set(cv2.CAP_PROP_FPS, 15)
 
+# camera.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+# camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+# camera.set(cv2.CAP_PROP_FPS, 15)
+
+def initialize_camera():
+
+    camera = cv2.VideoCapture(0)
+
+    if not camera.isOpened():
+
+        print("ERROR: Camera not detected!")
+
+        return None
+
+    camera.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+    camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+    camera.set(cv2.CAP_PROP_FPS, 15)
+
+    print("Camera initialized successfully")
+
+    return camera
+
+
+camera = initialize_camera()
+if camera is None:
+
+    print("No camera available")
+
+    raise Exception("Camera initialization failed")
 
 def generate_frames():
 
