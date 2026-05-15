@@ -23,7 +23,10 @@ CHAT_ID = os.getenv("CHAT_ID")
 
 def wait_for_internet():
 
-    print("Waiting for internet connection...", flush=True)
+    print(
+        "Waiting for internet connection...",
+        flush=True
+    )
 
     while True:
 
@@ -34,41 +37,50 @@ def wait_for_internet():
                 timeout=5
             )
 
-            print("Internet connected!", flush=True)
+            print(
+                "Internet connected!",
+                flush=True
+            )
 
             return
 
         except OSError:
 
             print(
-                "No internet... retrying in 5 seconds",
+                "No internet... retrying in 5 sec",
                 flush=True
             )
 
             time.sleep(5)
 
 # --------------------------------
-# SEND TELEGRAM MESSAGE
+# TELEGRAM
 # --------------------------------
 
 def send_telegram_message(message):
 
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-
-    data = {
-        "chat_id": CHAT_ID,
-        "text": message
-    }
-
     try:
+
+        url = (
+            f"https://api.telegram.org/"
+            f"bot{BOT_TOKEN}/sendMessage"
+        )
+
+        data = {
+            "chat_id": CHAT_ID,
+            "text": message
+        }
 
         response = requests.post(
             url,
-            data=data
+            data=data,
+            timeout=10
         )
 
-        print("Telegram Response:", flush=True)
-        print(response.text, flush=True)
+        print(
+            response.text,
+            flush=True
+        )
 
     except Exception as e:
 
@@ -78,7 +90,7 @@ def send_telegram_message(message):
         )
 
 # --------------------------------
-# START FLASK SERVER
+# FLASK WATCHDOG
 # --------------------------------
 
 def start_flask_server():
@@ -86,27 +98,94 @@ def start_flask_server():
     while True:
 
         print(
-            "Starting Flask camera server...",
+            "Starting camera server...",
             flush=True
         )
 
-        flask_process = subprocess.Popen(
+        process = subprocess.Popen(
             ["python", "app.py"]
         )
 
-        flask_process.wait()
+        process.wait()
 
         print(
-            "Flask server stopped!",
+            "Camera server stopped",
             flush=True
         )
 
         print(
-            "Restarting in 30 seconds...",
+            "Restarting in 30 sec",
             flush=True
         )
 
         time.sleep(30)
+
+# --------------------------------
+# CLOUDFLARE WATCHDOG
+# --------------------------------
+
+def start_cloudflare():
+
+    while True:
+
+        print(
+            "Starting Cloudflare tunnel...",
+            flush=True
+        )
+
+        process = subprocess.Popen(
+            [
+                "cloudflared",
+                "tunnel",
+                "--url",
+                "http://localhost:5000"
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True
+        )
+
+        url_sent = False
+
+        for line in process.stdout:
+
+            print(
+                line.strip(),
+                flush=True
+            )
+
+            match = re.search(
+                r"https://[-a-zA-Z0-9]+\.trycloudflare\.com",
+                line
+            )
+
+            if match and not url_sent:
+
+                public_url = match.group(0)
+
+                print(
+                    f"FOUND URL:\n{public_url}",
+                    flush=True
+                )
+
+                send_telegram_message(
+                    f"🎥 Camera Online\n\n"
+                    f"{public_url}"
+                )
+
+                url_sent = True
+
+        print(
+            "Tunnel disconnected",
+            flush=True
+        )
+
+        print(
+            "Creating new tunnel in 10 sec",
+            flush=True
+        )
+
+        time.sleep(10)
 
 # --------------------------------
 # MAIN STARTUP
@@ -115,7 +194,7 @@ def start_flask_server():
 wait_for_internet()
 
 # --------------------------------
-# START FLASK THREAD
+# START FLASK
 # --------------------------------
 
 flask_thread = threading.Thread(
@@ -126,92 +205,35 @@ flask_thread.daemon = True
 
 flask_thread.start()
 
-# Give Flask time to start
+# allow Flask startup
+
 time.sleep(10)
 
 # --------------------------------
-# START CLOUDFLARE TUNNEL
+# START CLOUDFLARE
 # --------------------------------
 
-print(
-    "Starting Cloudflare tunnel...",
-    flush=True
+cloudflare_thread = threading.Thread(
+    target=start_cloudflare
 )
 
-cloudflare_process = subprocess.Popen(
-    [
-        "cloudflared",
-        "tunnel",
-        "--url",
-        "http://localhost:5000"
-    ],
-    stdout=subprocess.PIPE,
-    stderr=subprocess.STDOUT,
-    text=True
-)
+cloudflare_thread.daemon = True
+
+cloudflare_thread.start()
 
 # --------------------------------
-# READ CLOUDFLARE OUTPUT
-# --------------------------------
-
-def monitor_cloudflare():
-
-    for line in cloudflare_process.stdout:
-
-        print(line.strip(), flush=True)
-
-        match = re.search(
-            r"https://[-a-zA-Z0-9]+\.trycloudflare\.com",
-            line
-        )
-
-        if match:
-
-            public_url = match.group(0)
-
-            print(
-                "\nFOUND PUBLIC URL:",
-                flush=True
-            )
-
-            print(
-                public_url,
-                flush=True
-            )
-
-            send_telegram_message(
-                f"🎥 Camera Server Online\n\n"
-                f"URL:\n{public_url}"
-            )
-
-            break
-
-# --------------------------------
-# START MONITOR THREAD
-# --------------------------------
-
-monitor_thread = threading.Thread(
-    target=monitor_cloudflare
-)
-
-monitor_thread.daemon = True
-
-monitor_thread.start()
-
-# --------------------------------
-# KEEP SCRIPT ALIVE
+# KEEP PROCESS ALIVE
 # --------------------------------
 
 try:
 
     while True:
+
         time.sleep(1)
 
 except KeyboardInterrupt:
 
     print(
-        "\nStopping services...",
+        "\nStopping...",
         flush=True
     )
-
-    cloudflare_process.terminate()
