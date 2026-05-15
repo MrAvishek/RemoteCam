@@ -5,28 +5,38 @@ import re
 import time
 import socket
 import os
+import logging
 
 from dotenv import load_dotenv
 
 load_dotenv()
 
 # --------------------------------
-# TELEGRAM CONFIG
+# CONFIG
 # --------------------------------
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 
+last_url = None
+
 # --------------------------------
-# WAIT FOR INTERNET
+# LOGGING
+# --------------------------------
+
+logging.basicConfig(
+    filename="server.log",
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(message)s"
+)
+
+# --------------------------------
+# INTERNET
 # --------------------------------
 
 def wait_for_internet():
 
-    print(
-        "Waiting for internet connection...",
-        flush=True
-    )
+    print("Waiting for internet...", flush=True)
 
     while True:
 
@@ -38,8 +48,12 @@ def wait_for_internet():
             )
 
             print(
-                "Internet connected!",
+                "Internet connected",
                 flush=True
+            )
+
+            logging.info(
+                "Internet connected"
             )
 
             return
@@ -47,8 +61,12 @@ def wait_for_internet():
         except OSError:
 
             print(
-                "No internet... retrying in 5 sec",
+                "No internet. Retry in 5 sec",
                 flush=True
+            )
+
+            logging.warning(
+                "Internet unavailable"
             )
 
             time.sleep(5)
@@ -66,28 +84,59 @@ def send_telegram_message(message):
             f"bot{BOT_TOKEN}/sendMessage"
         )
 
-        data = {
-            "chat_id": CHAT_ID,
-            "text": message
-        }
-
-        response = requests.post(
+        requests.post(
             url,
-            data=data,
+            data={
+                "chat_id": CHAT_ID,
+                "text": message
+            },
             timeout=10
         )
 
-        print(
-            response.text,
-            flush=True
+        logging.info(
+            "Telegram message sent"
         )
 
     except Exception as e:
 
-        print(
-            f"Telegram Error: {e}",
-            flush=True
+        logging.error(
+            f"Telegram error: {e}"
         )
+
+# --------------------------------
+# WAIT FOR FLASK
+# --------------------------------
+
+def wait_for_flask():
+
+    print(
+        "Waiting for Flask server...",
+        flush=True
+    )
+
+    while True:
+
+        try:
+
+            requests.get(
+                "http://localhost:5000",
+                timeout=3
+            )
+
+            print(
+                "Flask ready",
+                flush=True
+            )
+
+            logging.info(
+                "Flask ready"
+            )
+
+            return
+
+        except:
+
+            time.sleep(2)
 
 # --------------------------------
 # FLASK WATCHDOG
@@ -102,6 +151,10 @@ def start_flask_server():
             flush=True
         )
 
+        logging.info(
+            "Starting app.py"
+        )
+
         process = subprocess.Popen(
             ["python", "app.py"]
         )
@@ -109,8 +162,12 @@ def start_flask_server():
         process.wait()
 
         print(
-            "Camera server stopped",
+            "Flask stopped",
             flush=True
+        )
+
+        logging.warning(
+            "app.py exited"
         )
 
         print(
@@ -126,11 +183,30 @@ def start_flask_server():
 
 def start_cloudflare():
 
+    global last_url
+
     while True:
 
+        wait_for_internet()
+
+        subprocess.run(
+            [
+                "taskkill",
+                "/F",
+                "/IM",
+                "cloudflared.exe"
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
+
         print(
-            "Starting Cloudflare tunnel...",
+            "Starting tunnel...",
             flush=True
+        )
+
+        logging.info(
+            "Starting Cloudflare"
         )
 
         process = subprocess.Popen(
@@ -145,8 +221,6 @@ def start_cloudflare():
             text=True
         )
 
-        url_sent = False
-
         for line in process.stdout:
 
             print(
@@ -159,21 +233,26 @@ def start_cloudflare():
                 line
             )
 
-            if match and not url_sent:
+            if match:
 
                 public_url = match.group(0)
 
-                print(
-                    f"FOUND URL:\n{public_url}",
-                    flush=True
-                )
+                if public_url != last_url:
 
-                send_telegram_message(
-                    f"🎥 Camera Online\n\n"
-                    f"{public_url}"
-                )
+                    last_url = public_url
 
-                url_sent = True
+                    logging.info(
+                        f"Tunnel URL: {public_url}"
+                    )
+
+                    send_telegram_message(
+                        f"🎥 Camera Online\n\n"
+                        f"{public_url}"
+                    )
+
+        logging.warning(
+            "Tunnel exited"
+        )
 
         print(
             "Tunnel disconnected",
@@ -181,48 +260,36 @@ def start_cloudflare():
         )
 
         print(
-            "Creating new tunnel in 10 sec",
+            "Recreating in 10 sec",
             flush=True
         )
 
         time.sleep(10)
 
 # --------------------------------
-# MAIN STARTUP
+# STARTUP
 # --------------------------------
 
 wait_for_internet()
 
-# --------------------------------
-# START FLASK
-# --------------------------------
-
 flask_thread = threading.Thread(
-    target=start_flask_server
+    target=start_flask_server,
+    daemon=True
 )
-
-flask_thread.daemon = True
 
 flask_thread.start()
 
-# allow Flask startup
-
-time.sleep(10)
-
-# --------------------------------
-# START CLOUDFLARE
-# --------------------------------
+wait_for_flask()
 
 cloudflare_thread = threading.Thread(
-    target=start_cloudflare
+    target=start_cloudflare,
+    daemon=True
 )
-
-cloudflare_thread.daemon = True
 
 cloudflare_thread.start()
 
 # --------------------------------
-# KEEP PROCESS ALIVE
+# KEEP ALIVE
 # --------------------------------
 
 try:
@@ -233,7 +300,11 @@ try:
 
 except KeyboardInterrupt:
 
+    logging.info(
+        "Stopping server"
+    )
+
     print(
-        "\nStopping...",
+        "Stopping...",
         flush=True
     )
