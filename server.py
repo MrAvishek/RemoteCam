@@ -19,7 +19,7 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 
 last_url = None
-
+latest_link = "No active tunnel"
 # --------------------------------
 # LOGGING
 # --------------------------------
@@ -184,6 +184,7 @@ def start_flask_server():
 def start_cloudflare():
 
     global last_url
+    global latest_link
 
     while True:
 
@@ -240,6 +241,8 @@ def start_cloudflare():
                 if public_url != last_url:
 
                     last_url = public_url
+
+                    latest_link = public_url
 
                     logging.info(
                         f"Tunnel URL: {public_url}"
