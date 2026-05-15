@@ -1,0 +1,8 @@
+2026-05-15 12:51:47,786 | INFO | Internet connected
+2026-05-15 12:51:47,788 | INFO | Starting app.py
+2026-05-15 12:51:59,464 | INFO | Flask ready
+2026-05-15 12:51:59,475 | INFO | Internet connected
+2026-05-15 12:51:59,663 | INFO | Starting Cloudflare
+2026-05-15 12:52:05,273 | INFO | Tunnel URL: https://spouse-vehicle-dem-stephen.trycloudflare.com
+2026-05-15 12:52:06,358 | INFO | Telegram message sent
+2026-05-15 12:53:42,735 | INFO | Stopping server
